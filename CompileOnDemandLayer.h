@@ -244,7 +244,7 @@ private:
   template <typename ModulePtrT>
   void addLogicalModule(CODLogicalDylib &LD, ModulePtrT SrcMPtr) {
 
-    // Bump the linkage and rename any anonymous/privote members in SrcM to
+    // Bump the linkage and rename any anonymous/private members in SrcM to
     // ensure that everything will resolve properly after we partition SrcM.
     makeAllSymbolsExternallyAccessible(*SrcMPtr);
 

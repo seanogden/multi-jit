@@ -14,7 +14,7 @@
 #ifndef LLVM_EXECUTIONENGINE_ORC_LOGICALDYLIB_H
 #define LLVM_EXECUTIONENGINE_ORC_LOGICALDYLIB_H
 
-#include "llvm/ExecutionEngine/Orc/JITSymbol.h"
+#include "JITSymbol.h"
 #include <string>
 #include <vector>
 
