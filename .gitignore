@@ -1,2 +1,3 @@
 build/
 .ycm*
+_vimrc_local.vim
