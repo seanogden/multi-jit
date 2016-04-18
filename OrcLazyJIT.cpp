@@ -82,6 +82,13 @@ OrcLazyJIT::createIndirectStubsMgrBuilder(Triple T) {
   }
 }
 
+OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
+  return [](std::unique_ptr<Module> M) { 
+    return M; 
+  };
+}
+
+
 OrcLazyJIT::TransformFtor OrcLazyJIT::createDebugDumper() {
 
   switch (OrcDumpKind) {

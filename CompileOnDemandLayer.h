@@ -20,6 +20,7 @@
 #include "LogicalDylib.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include <iostream>
 #include <list>
 #include <memory>
 #include <set>
@@ -283,6 +284,11 @@ private:
           std::make_pair(CCInfo.getAddress(),
                          JITSymbolBase::flagsFromGlobalValue(F));
         CCInfo.setCompileAction([this, &LD, LMH, &F]() {
+          std::cout << "COMPILING " << F.getName().str() << std::endl;
+          auto attr = F.getAttributes();
+          if(attr.hasAttribute(AttributeSet::FunctionIndex, "FPGA")){
+            std::cout << "FPGA!!!" << std::endl;
+          }
           return this->extractAndCompile(LD, LMH, F);
         });
       }
@@ -354,6 +360,7 @@ private:
     // Build a resolver for the globals module and add it to the base layer.
     auto GVsResolver = createLambdaResolver(
         [&LD, LMH](const std::string &Name) {
+        
           auto &LMResources = LD.getLogicalModuleResources(LMH);
           if (auto Sym = LMResources.StubsMgr->findStub(Name, false))
             return RuntimeDyld::SymbolInfo(Sym.getAddress(), Sym.getFlags());
@@ -481,12 +488,14 @@ private:
     // Create memory manager and symbol resolver.
     auto Resolver = createLambdaResolver(
         [this, &LD, LMH](const std::string &Name) {
+          std::cout << "1. looking for " << Name << std::endl;
           if (auto Symbol = LD.findSymbolInternally(LMH, Name))
             return RuntimeDyld::SymbolInfo(Symbol.getAddress(),
                                            Symbol.getFlags());
           return LD.getDylibResources().ExternalSymbolResolver(Name);
         },
         [this, &LD, LMH](const std::string &Name) {
+          std::cout << "2. looking for " << Name << std::endl;
           if (auto Symbol = LD.findSymbolInternally(LMH, Name))
             return RuntimeDyld::SymbolInfo(Symbol.getAddress(),
                                            Symbol.getFlags());
