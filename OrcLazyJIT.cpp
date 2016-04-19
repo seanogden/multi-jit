@@ -14,6 +14,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/TypeBuilder.h"
+#include "llvm/IR/Constants.h"
 #include <cstdio>
 #include <system_error>
 #include <vector>
@@ -97,17 +98,39 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
                 "printf", printf_type,
                 AttributeSet().addAttribute(M->getContext(), 1U, Attribute::NoAlias)));
 
-    Constant *arg = ConstantDataArray::getString(M->getContext(), "hello world", true);
-    std::vector<Value*> args;
-    args.push_back(arg);
-
-
     for (Function &F : *M) {
         dbgs() << "\n\nFUNCTION: " << F.getName().str() << "\n";
         
         //F.dump();
 
         if (!F.empty()) {
+
+            // Type Definitions
+            Constant *string_to_print = ConstantDataArray::getString(M->getContext(), F.getName().str().append("\n"), true);
+            Type* StringType = string_to_print->getType();
+            GlobalVariable* gvar_array__str = new GlobalVariable(/*Module=*/*M, 
+                    /*Type=*/StringType,
+                    /*isConstant=*/true,
+                    /*Linkage=*/GlobalValue::PrivateLinkage,
+                    /*Initializer=*/0, // has initializer, specified below
+                    /*Name=*/".str");
+            gvar_array__str->setAlignment(1);
+
+            /*Constant zeros for array offsets*/
+            ConstantInt* const_int32 = ConstantInt::get(M->getContext(), APInt(32, StringRef("0"), 10));
+            std::vector<Constant*> const_ptr_indices;
+            const_ptr_indices.push_back(const_int32);
+            const_ptr_indices.push_back(const_int32);
+
+            /*Construct getelementptr llvm*/
+            Constant* const_ptr = ConstantExpr::getGetElementPtr(StringType, gvar_array__str, const_ptr_indices);
+            gvar_array__str->setInitializer(string_to_print);
+
+            /*Construct arglist for printf*/
+            std::vector<Value*> args;
+            args.push_back(const_ptr);
+
+
             BasicBlock& pb = F.front();
             dbgs() << "\tFIRST BB:";
             pb.dump();
@@ -115,7 +138,11 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
             Instruction& pi = pb.front();
             dbgs() << "\t FIRST INSTRUCTION:";
             pi.dump();
-            //Instruction* ni = CallInst::Create(printf_func, args, "printf", &pi);
+            Instruction* ni = CallInst::Create(printf_func, args, "printf", &pi);
+            dbgs() << "\t NEW CALL INSTRUCTION:";
+            ni->dump();
+            dbgs() << "\t UPDATED BB:";
+            pb.dump();
             //std::cout << "ADDING PRINTF!!!" << std::endl;
         }
         else {
