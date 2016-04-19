@@ -36,7 +36,8 @@ public:
     TransformFtor;
   typedef orc::IRTransformLayer<CompileLayerT, TransformFtor> IRDumpLayerT;
   typedef orc::IRTransformLayer<IRDumpLayerT, TransformFtor> ProfilingLayerT;
-  typedef orc::CompileOnDemandLayer<ProfilingLayerT, CompileCallbackMgr> CODLayerT;
+  typedef orc::IRTransformLayer<ProfilingLayerT, TransformFtor> PreDumpLayerT;
+  typedef orc::CompileOnDemandLayer<PreDumpLayerT, CompileCallbackMgr> CODLayerT;
   typedef CODLayerT::IndirectStubsManagerBuilderT
     IndirectStubsManagerBuilder;
   typedef CODLayerT::ModuleSetHandleT ModuleHandleT;
@@ -51,7 +52,8 @@ public:
         CompileLayer(ObjectLayer, orc::SimpleCompiler(*this->TM)),
         IRDumpLayer(CompileLayer, insertProfilingCode()),
         ProfilingLayer(IRDumpLayer, createDebugDumper()),
-        CODLayer(ProfilingLayer, extractSingleFunction, *this->CCMgr,
+        PreDumpLayer(ProfilingLayer, createPreDebugDumper()),
+        CODLayer(PreDumpLayer, extractSingleFunction, *this->CCMgr,
                  std::move(IndirectStubsMgrBuilder), InlineStubs),
         CXXRuntimeOverrides(
             [this](const std::string &S) { return mangle(S); }) {}
@@ -147,6 +149,7 @@ private:
   }
 
   static TransformFtor createDebugDumper();
+  static TransformFtor createPreDebugDumper();
   static TransformFtor insertProfilingCode();
 
   std::unique_ptr<TargetMachine> TM;
@@ -158,6 +161,7 @@ private:
   CompileLayerT CompileLayer;
   IRDumpLayerT IRDumpLayer;
   ProfilingLayerT ProfilingLayer;
+  PreDumpLayerT PreDumpLayer;
   CODLayerT CODLayer;
 
   orc::LocalCXXRuntimeOverrides CXXRuntimeOverrides;

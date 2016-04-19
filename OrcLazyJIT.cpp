@@ -11,8 +11,12 @@
 #include "llvm/ExecutionEngine/Orc/OrcArchitectureSupport.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/DynamicLibrary.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/TypeBuilder.h"
 #include <cstdio>
 #include <system_error>
+#include <vector>
 
 using namespace llvm;
 
@@ -82,15 +86,50 @@ OrcLazyJIT::createIndirectStubsMgrBuilder(Triple T) {
   }
 }
 
+
 OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
   return [](std::unique_ptr<Module> M) { 
+    // Make a prototype for printf.  Assume it's already linked from environment.
+    FunctionType *printf_type =
+        TypeBuilder<int(char *, ...), false>::get(getGlobalContext());
+
+    Function *printf_func = cast<Function>(M->getOrInsertFunction(
+                "printf", printf_type,
+                AttributeSet().addAttribute(M->getContext(), 1U, Attribute::NoAlias)));
+
+    Constant *arg = ConstantDataArray::getString(M->getContext(), "hello world", true);
+    std::vector<Value*> args;
+    args.push_back(arg);
+
+
+    for (Function &F : *M) {
+        dbgs() << "\n\nFUNCTION: " << F.getName().str() << "\n";
+        
+        //F.dump();
+
+        if (!F.empty()) {
+            BasicBlock& pb = F.front();
+            dbgs() << "\tFIRST BB:";
+            pb.dump();
+
+            Instruction& pi = pb.front();
+            dbgs() << "\t FIRST INSTRUCTION:";
+            pi.dump();
+            //Instruction* ni = CallInst::Create(printf_func, args, "printf", &pi);
+            //std::cout << "ADDING PRINTF!!!" << std::endl;
+        }
+        else {
+            dbgs() << "\t" << "EMPTY\n\n";
+        }
+    }
+
     return M; 
   };
 }
 
+OrcLazyJIT::TransformFtor OrcLazyJIT::createPreDebugDumper() {
 
-OrcLazyJIT::TransformFtor OrcLazyJIT::createDebugDumper() {
-
+  OrcDumpKind = DumpKind::NoDump; 
   switch (OrcDumpKind) {
   case DumpKind::NoDump:
     return [](std::unique_ptr<Module> M) { return M; };
@@ -118,7 +157,59 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::createDebugDumper() {
     return [](std::unique_ptr<Module> M) {
              dbgs() << "----- Module Start -----\n" << *M
                     << "----- Module End -----\n";
+             dbgs().flush();
+             return M;
+           };
 
+  case DumpKind::DumpModsToDisk:
+    return [](std::unique_ptr<Module> M) {
+             std::error_code EC;
+             raw_fd_ostream Out(M->getModuleIdentifier() + ".ll", EC,
+                                sys::fs::F_Text);
+             if (EC) {
+               errs() << "Couldn't open " << M->getModuleIdentifier()
+                      << " for dumping.\nError:" << EC.message() << "\n";
+               exit(1);
+             }
+             Out << *M;
+             return M;
+           };
+  }
+  llvm_unreachable("Unknown DumpKind");
+}
+
+
+OrcLazyJIT::TransformFtor OrcLazyJIT::createDebugDumper() {
+
+  OrcDumpKind = DumpKind::DumpModsToStdErr; 
+  switch (OrcDumpKind) {
+  case DumpKind::NoDump:
+    return [](std::unique_ptr<Module> M) { return M; };
+
+  case DumpKind::DumpFuncsToStdOut:
+    return [](std::unique_ptr<Module> M) {
+      printf("[ ");
+
+      for (const auto &F : *M) {
+        if (F.isDeclaration())
+          continue;
+
+        if (F.hasName()) {
+          std::string Name(F.getName());
+          printf("%s ", Name.c_str());
+        } else
+          printf("<anon> ");
+      }
+
+      printf("]\n");
+      return M;
+    };
+
+  case DumpKind::DumpModsToStdErr:
+    return [](std::unique_ptr<Module> M) {
+             dbgs() << "----- Module Start -----\n" << *M
+                    << "----- Module End -----\n";
+             dbgs().flush();
              return M;
            };
 
