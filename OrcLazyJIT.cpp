@@ -90,6 +90,7 @@ OrcLazyJIT::createIndirectStubsMgrBuilder(Triple T) {
 
 OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
   return [](std::unique_ptr<Module> M) { 
+
     // Make a prototype for printf.  Assume it's already linked from environment.
     FunctionType *printf_type =
         TypeBuilder<int(char *, ...), false>::get(getGlobalContext());
@@ -99,21 +100,18 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
                 AttributeSet().addAttribute(M->getContext(), 1U, Attribute::NoAlias)));
 
     for (Function &F : *M) {
-        dbgs() << "\n\nFUNCTION: " << F.getName().str() << "\n";
-        
-        //F.dump();
-
         if (!F.empty()) {
 
-            // Type Definitions
+            //Make a global String value with the functions name
             Constant *string_to_print = ConstantDataArray::getString(M->getContext(), F.getName().str().append("\n"), true);
             Type* StringType = string_to_print->getType();
-            GlobalVariable* gvar_array__str = new GlobalVariable(/*Module=*/*M, 
-                    /*Type=*/StringType,
-                    /*isConstant=*/true,
-                    /*Linkage=*/GlobalValue::PrivateLinkage,
-                    /*Initializer=*/0, // has initializer, specified below
-                    /*Name=*/".str");
+            GlobalVariable* gvar_array__str = new GlobalVariable(
+                    /*Module*/*M, 
+                    /*Type*/StringType,
+                    /*isConstant*/true,
+                    /*Linkage*/GlobalValue::PrivateLinkage,
+                    /*Initializer*/0, // has initializer, specified below
+                    /*Name prefix*/".str");
             gvar_array__str->setAlignment(1);
 
             /*Constant zeros for array offsets*/
@@ -130,23 +128,9 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
             std::vector<Value*> args;
             args.push_back(const_ptr);
 
-
-            BasicBlock& pb = F.front();
-            dbgs() << "\tFIRST BB:";
-            pb.dump();
-
-            Instruction& pi = pb.front();
-            dbgs() << "\t FIRST INSTRUCTION:";
-            pi.dump();
+            /*Insert a call instruction to call print at the beginning of the first basic block of this function*/
+            Instruction& pi = F.front().front();
             Instruction* ni = CallInst::Create(printf_func, args, "printf", &pi);
-            dbgs() << "\t NEW CALL INSTRUCTION:";
-            ni->dump();
-            dbgs() << "\t UPDATED BB:";
-            pb.dump();
-            //std::cout << "ADDING PRINTF!!!" << std::endl;
-        }
-        else {
-            dbgs() << "\t" << "EMPTY\n\n";
         }
     }
 
