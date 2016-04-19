@@ -15,6 +15,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/TypeBuilder.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/Transforms/Instrumentation.h"
+#include "llvm/IR/Type.h"
 #include <cstdio>
 #include <system_error>
 #include <vector>
@@ -287,6 +289,19 @@ int llvm::runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]) {
   OrcLazyJIT J(std::move(TM), std::move(CompileCallbackMgr),
                std::move(IndirectStubsMgrBuilder),
                OrcInlineStubs);
+
+  //Make a global counters array
+  int numFunctions = M->size();
+  ArrayType *CounterTy =
+      ArrayType::get(Type::getInt64Ty(M->getContext()), numFunctions);
+  GlobalVariable *Counters =
+      new GlobalVariable(*M, CounterTy, false,
+              GlobalValue::InternalLinkage,
+              Constant::getNullValue(CounterTy),
+              "__llvm_func_ctr");
+
+  // Insert the profiling initializer code into the main function of module
+  Function *MainFunc = M->getFunction("main");
 
   // Add the module, look up main and run it.
   auto MainHandle = J.addModule(std::move(M));
