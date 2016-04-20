@@ -104,7 +104,7 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
 
     // Add a prototype for the recompile function so that we can call it if
     // this function becomes hot.
-    Type* RecompileArgTypes[] = { Int64 };
+    Type* RecompileArgTypes[] = { Int64 , Int64};
     Function *RecompileHot =
         Function::Create(FunctionType::get(Int64, RecompileArgTypes, false),
                          GlobalValue::ExternalLinkage, "$recompile_hot", M.get());
@@ -153,8 +153,10 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
 
         // insert a compile to compile the hot version
         uint64_t JITAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
+        uint64_t ModuleAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(M.get()));
         Value *JITAddrConst = ConstantInt::get(Int64, JITAddr);
-        Value *RecompileHotArgs[] = {JITAddrConst};
+        Value *ModuleAddrConst = ConstantInt::get(Int64, ModuleAddr);
+        Value *RecompileHotArgs[] = {JITAddrConst, ModuleAddrConst};
         Value *HotFnAddr = B.CreateCall(RecompileHot, RecompileHotArgs);
 
         // The recompile function returns address of optimized version.
