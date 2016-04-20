@@ -104,7 +104,7 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
 
     // Add a prototype for the recompile function so that we can call it if
     // this function becomes hot.
-    Type* RecompileArgTypes[] = { Int64, Int64 };
+    Type* RecompileArgTypes[] = { Int64 };
     Function *RecompileHot =
         Function::Create(FunctionType::get(Int64, RecompileArgTypes, false),
                          GlobalValue::ExternalLinkage, "$recompile_hot", M.get());
@@ -153,6 +153,24 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
 
         // insert a compile to compile the hot version
         uint64_t JITAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
+        Value *JITAddrConst = ConstantInt::get(Int64, JITAddr);
+        Value *RecompileHotArgs[] = {JITAddrConst};
+        Value *HotFnAddr = B.CreateCall(RecompileHot, RecompileHotArgs);
+
+        // The recompile function returns address of optimized version.
+        // Cast it to a function pointer and call it.
+        Value *HotFn = B.CreateIntToPtr(HotFnAddr, F.getType());
+        std::vector<Value*> CallArgs;
+        for (auto &A : F.args())
+            CallArgs.push_back(&A);
+        CallInst *HotFnCall = B.CreateCall(HotFn, CallArgs);
+        HotFnCall->setTailCall(true);
+
+        if (F.getReturnType()->isVoidTy())
+            B.CreateRetVoid();
+        else
+            B.CreateRet(HotFnCall);
+            //B.CreateRetVoid();
 
     }
     return M; 

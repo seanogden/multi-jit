@@ -51,7 +51,7 @@ public:
 	ObjectLayer(),
         CompileLayer(ObjectLayer, orc::SimpleCompiler(*this->TM)),
         IRDumpLayer(CompileLayer, createDebugDumper()),
-        ProfilingLayer(IRDumpLayer, insertProfilingCode()),
+        ProfilingLayer(IRDumpLayer, insertLocalProfilingCode()),
         PreDumpLayer(ProfilingLayer, createPreDebugDumper()),
         CODLayer(PreDumpLayer, extractSingleFunction, *this->CCMgr,
                  std::move(IndirectStubsMgrBuilder), InlineStubs),
