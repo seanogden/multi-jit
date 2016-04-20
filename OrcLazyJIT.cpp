@@ -122,14 +122,31 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
 
         Counter->setAlignment(4);
 
-        // Split the entry-block after last alloca
+        //Find the last alloca instruction.  We don't want to insert stuff before these.
         BasicBlock *Entry = &F.front();
         auto I = Entry->begin();
         while (isa<AllocaInst>(I))
             ++I;
+
+        // Split the entry-block after last alloca
         BasicBlock *ContEntryBlock = F.front().splitBasicBlock(I, "entry_cont");
 
         //Create an extra basic block to branch to if the func is hot
+        BasicBlock *RecompileBlock =
+            BasicBlock::Create(M->getContext(), "recompile");
+        F.getBasicBlockList().push_back(RecompileBlock);
+
+        // In the entry block, add load compare inc and store for the
+        // counter for this func
+        IRBuilder<> B(Entry);
+        Value *CounterVal = B.CreateLoad(Counter, "counter");
+        Value *Condition = B.CreateICmpUGT(CounterVal, ConstantInt::get(Int32, 1000));
+        Value *CounterInc = B.CreateAdd(CounterVal, ConstantInt::get(Int32, 1));
+        B.CreateStore(CounterInc, Counter);
+
+        // If the function is hot, jump to recompile block, otherwise just
+        // continue at entry_cont block
+        B.CreateCondBr(Condition, RecompileBlock, ContEntryBlock);
     }
     return M; 
   };
