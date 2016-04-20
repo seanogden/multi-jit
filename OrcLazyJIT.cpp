@@ -23,6 +23,8 @@
 
 using namespace llvm;
 
+int numFunctions;
+
 namespace {
 
   enum class DumpKind { NoDump, DumpFuncsToStdOut, DumpModsToStdErr,
@@ -101,8 +103,25 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
                 "printf", printf_type,
                 AttributeSet().addAttribute(M->getContext(), 1U, Attribute::NoAlias)));
 
+    ArrayType *CounterTy;
+    GlobalVariable *Counters;
+
+    bool firstfunc = true;
+
     for (Function &F : *M) {
         if (!F.empty()) {
+            
+            //Declare the counter table global if this is a module that has actual functions 
+            //(as opposed to a module with just declarations)
+            if (firstfunc) {
+              CounterTy = ArrayType::get(Type::getInt64Ty(M->getContext()), numFunctions);
+              Counters =
+                  new GlobalVariable(*M, CounterTy, false,
+                          GlobalValue::ExternalLinkage,
+                          nullptr,
+                          "__llvm_func_ctr");
+              firstfunc = false;
+            }
 
             //Make a global String value with the functions name
             Constant *string_to_print = ConstantDataArray::getString(M->getContext(), F.getName().str().append("\n"), true);
@@ -291,12 +310,12 @@ int llvm::runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]) {
                OrcInlineStubs);
 
   //Make a global counters array
-  int numFunctions = M->size();
+  numFunctions = M->size();
   ArrayType *CounterTy =
       ArrayType::get(Type::getInt64Ty(M->getContext()), numFunctions);
   GlobalVariable *Counters =
       new GlobalVariable(*M, CounterTy, false,
-              GlobalValue::InternalLinkage,
+              GlobalValue::ExternalLinkage,
               Constant::getNullValue(CounterTy),
               "__llvm_func_ctr");
 
