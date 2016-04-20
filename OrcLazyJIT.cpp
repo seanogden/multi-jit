@@ -91,6 +91,50 @@ OrcLazyJIT::createIndirectStubsMgrBuilder(Triple T) {
   }
 }
 
+//Add instrumentation to count the function invocations.
+//This version does not have a global table, so recompilation
+//decisions must be made locally based on the raw counter.
+//Later we will add a global function table to hold all counters
+//so that we can periodically check which functions are the "hottest"
+OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
+  return [](std::unique_ptr<Module> M) { 
+
+    Type *Int32 = Type::getInt32Ty(M->getContext());
+    Type *Int64 = Type::getInt64Ty(M->getContext());
+
+    // Add a prototype for the recompile function so that we can call it if
+    // this function becomes hot.
+    Type* RecompileArgTypes[] = { Int64, Int64 };
+    Function *RecompileHot =
+        Function::Create(FunctionType::get(Int64, RecompileArgTypes, false),
+                         GlobalValue::ExternalLinkage, "$recompile_hot", M.get());
+
+    for (auto &F : *M) {
+
+        //Declarations don't have bodies
+        if (F.isDeclaration())
+            continue;
+
+        GlobalVariable* Counter =
+            new GlobalVariable(*M, Int32, false, GlobalValue::ExternalLinkage,
+                               ConstantInt::get(Int32, 0),
+                               F.getName() + "$counter");
+
+        Counter->setAlignment(4);
+
+        // Split the entry-block after last alloca
+        BasicBlock *Entry = &F.front();
+        auto I = Entry->begin();
+        while (isa<AllocaInst>(I))
+            ++I;
+        BasicBlock *ContEntryBlock = F.front().splitBasicBlock(I, "entry_cont");
+
+        //Create an extra basic block to branch to if the func is hot
+    }
+    return M; 
+  };
+}
+
 
 OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
   return [](std::unique_ptr<Module> M) { 
