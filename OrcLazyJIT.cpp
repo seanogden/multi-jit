@@ -117,9 +117,10 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertProfilingCode() {
               CounterTy = ArrayType::get(Type::getInt64Ty(M->getContext()), numFunctions);
               Counters =
                   new GlobalVariable(*M, CounterTy, false,
-                          GlobalValue::ExternalLinkage,
+                          GlobalValue::CommonLinkage,
                           nullptr,
                           "__llvm_func_ctr");
+              Counters->setAlignment(16);
               firstfunc = false;
             }
 
@@ -315,9 +316,10 @@ int llvm::runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]) {
       ArrayType::get(Type::getInt64Ty(M->getContext()), numFunctions);
   GlobalVariable *Counters =
       new GlobalVariable(*M, CounterTy, false,
-              GlobalValue::ExternalLinkage,
+              GlobalValue::CommonLinkage,
               Constant::getNullValue(CounterTy),
               "__llvm_func_ctr");
+  Counters->setAlignment(16);
 
   // Insert the profiling initializer code into the main function of module
   Function *MainFunc = M->getFunction("main");
