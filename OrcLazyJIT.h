@@ -151,7 +151,7 @@ private:
   static TransformFtor createDebugDumper();
   static TransformFtor createPreDebugDumper();
   static TransformFtor insertProfilingCode();
-  static TransformFtor insertLocalProfilingCode();
+  TransformFtor insertLocalProfilingCode();
 
   std::unique_ptr<TargetMachine> TM;
   DataLayout DL;

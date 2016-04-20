@@ -97,7 +97,7 @@ OrcLazyJIT::createIndirectStubsMgrBuilder(Triple T) {
 //Later we will add a global function table to hold all counters
 //so that we can periodically check which functions are the "hottest"
 OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
-  return [](std::unique_ptr<Module> M) { 
+  return [this](std::unique_ptr<Module> M) { 
 
     Type *Int32 = Type::getInt32Ty(M->getContext());
     Type *Int64 = Type::getInt64Ty(M->getContext());
@@ -147,6 +147,13 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
         // If the function is hot, jump to recompile block, otherwise just
         // continue at entry_cont block
         B.CreateCondBr(Condition, RecompileBlock, ContEntryBlock);
+
+        // Switch IR Builder to the recompmile block
+        B.SetInsertPoint(RecompileBlock);
+
+        // insert a compile to compile the hot version
+        uint64_t JITAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
+
     }
     return M; 
   };
