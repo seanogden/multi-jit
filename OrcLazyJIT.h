@@ -60,7 +60,8 @@ public:
         CXXRuntimeOverrides(
             [this](const std::string &S) { return mangle(S); }),
         RecompileName(mangle("$recompile_hot")),
-        next_function_id(0) {}
+        next_function_id(0),
+        FunctionStubTable() {}
 
   ~OrcLazyJIT() {
     // Run any destructors registered with __cxa_atexit.
@@ -238,7 +239,7 @@ private:
   orc::LocalCXXRuntimeOverrides CXXRuntimeOverrides;
   std::vector<orc::CtorDtorRunner<CODLayerT>> IRStaticDestructorRunners;
   std::string RecompileName;
-  std::map<uint64_t, std::pair<std::shared_ptr<Function>, ModuleHandleT>> ColdFunctionASTs;
+  std::map<Function*, ModuleHandleT> FunctionStubTable;
 };
 
 int runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]);
