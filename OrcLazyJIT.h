@@ -73,8 +73,6 @@ public:
   static std::unique_ptr<CompileCallbackMgr> createCompileCallbackMgr(Triple T);
   static IndirectStubsManagerBuilder createIndirectStubsMgrBuilder(Triple T);
 
-  uint64_t next_id() { return next_function_id++; }
-
   ModuleHandleT addModule(std::unique_ptr<Module> M) {
     // Attach a data-layout if one isn't already present.
     if (M->getDataLayout().isDefault())
@@ -241,9 +239,6 @@ private:
   std::vector<orc::CtorDtorRunner<CODLayerT>> IRStaticDestructorRunners;
   std::string RecompileName;
   std::map<uint64_t, std::pair<std::shared_ptr<Function>, ModuleHandleT>> ColdFunctionASTs;
-  uint64_t next_function_id;
-
-                                
 };
 
 int runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]);
