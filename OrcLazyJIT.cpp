@@ -156,7 +156,7 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
         // continue at entry_cont block
         B.CreateCondBr(Condition, RecompileBlock, ContEntryBlock);
 
-        // Switch IR Builder to the recompmile block
+        // Switch IR Builder to the recompile block
         B.SetInsertPoint(RecompileBlock);
 
         // insert a compile to compile the hot version
@@ -166,6 +166,7 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
         Value *FuncAddrConst = ConstantInt::get(Int64, FuncAddr);
         Value *RecompileHotArgs[] = {JITAddrConst, FuncAddrConst};
         Value *HotFnAddr = B.CreateCall(RecompileHot, RecompileHotArgs);
+
 
         // The recompile function returns address of optimized version.
         // Cast it to a function pointer and call it.
@@ -180,8 +181,6 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
             B.CreateRetVoid();
         else
             B.CreateRet(HotFnCall);
-            //B.CreateRetVoid();
-
     }
     return M; 
   };

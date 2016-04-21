@@ -60,7 +60,6 @@ public:
         CXXRuntimeOverrides(
             [this](const std::string &S) { return mangle(S); }),
         RecompileName(mangle("$recompile_hot")),
-        next_function_id(0),
         FunctionStubTable() {}
 
   ~OrcLazyJIT() {
@@ -134,31 +133,28 @@ private:
 
 
       return createLambdaResolver(
-              [&](const std::string &Name) {
-              if (Name == RecompileName) {
-              auto RecompileAddr = static_cast<TargetAddress>(
-                      reinterpret_cast<uintptr_t>(
-                          OrcLazyJIT::recompileHotStatic));
-              return RuntimeDyld::SymbolInfo(RecompileAddr,
-                      JITSymbolFlags::Exported);
-              }
-
-              if (auto Sym = CODLayer.findSymbol(Name, true))
-              return RuntimeDyld::SymbolInfo(Sym.getAddress(),
-                      Sym.getFlags());
-
-              if (auto Sym = CXXRuntimeOverrides.searchOverrides(Name))
-              return Sym;
-
-              if (auto Addr =
-                      RTDyldMemoryManager::getSymbolAddressInProcess(Name))
-              return RuntimeDyld::SymbolInfo(Addr, JITSymbolFlags::Exported);
-
-              return RuntimeDyld::SymbolInfo(nullptr);
-              },
-          [](const std::string &Name) {
-              return RuntimeDyld::SymbolInfo(nullptr);
+        [&](const std::string &Name) {
+          if (Name == RecompileName) {
+            auto RecompileAddr = static_cast<TargetAddress>(
+              reinterpret_cast<uintptr_t>(OrcLazyJIT::recompileHotStatic));
+            return RuntimeDyld::SymbolInfo(RecompileAddr, JITSymbolFlags::Exported);
+                      
           }
+
+          if (auto Sym = CODLayer.findSymbol(Name, true))
+            return RuntimeDyld::SymbolInfo(Sym.getAddress(), Sym.getFlags());
+                      
+          if (auto Sym = CXXRuntimeOverrides.searchOverrides(Name))
+            return Sym;
+
+          if (auto Addr = RTDyldMemoryManager::getSymbolAddressInProcess(Name))
+            return RuntimeDyld::SymbolInfo(Addr, JITSymbolFlags::Exported);
+
+          return RuntimeDyld::SymbolInfo(nullptr);
+        },
+        [](const std::string &Name) {
+          return RuntimeDyld::SymbolInfo(nullptr);
+        }
       );
   }
 

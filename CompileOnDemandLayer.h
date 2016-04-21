@@ -283,6 +283,7 @@ private:
         StubInits[mangle(F.getName(), DL)] =
           std::make_pair(CCInfo.getAddress(),
                          JITSymbolBase::flagsFromGlobalValue(F));
+
         CCInfo.setCompileAction([this, &LD, LMH, &F]() {
           std::cout << "COMPILING " << F.getName().str() << std::endl;
           auto attr = F.getAttributes();
