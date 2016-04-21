@@ -103,8 +103,16 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
     Type *Int64 = Type::getInt64Ty(M->getContext());
 
     // Add a prototype for the recompile function so that we can call it if
-    // this function becomes hot.
-    Type* RecompileArgTypes[] = { Int64 , Int64};
+    // this function becomes hot.  Arguments are pointer to JIT and pointer to
+    // the Function (cast as int64).  
+    // RecompileHot is a call to recompileHotStatic with 
+    // these arguments, which in turn calls the recompileHot method of the JIT.
+    // with the pointer to the Function object (the thing that represents the IR
+    // for the function).
+    //
+    // The resolver knows that if you look for symbol $recompile_hot, it means
+    // you would like to call recompileHotStatic.
+    Type* RecompileArgTypes[] = { Int64 , Int64 };
     Function *RecompileHot =
         Function::Create(FunctionType::get(Int64, RecompileArgTypes, false),
                          GlobalValue::ExternalLinkage, "$recompile_hot", M.get());
@@ -153,10 +161,10 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
 
         // insert a compile to compile the hot version
         uint64_t JITAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
-        uint64_t ModuleAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(M.get()));
+        uint64_t FuncAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&F));
         Value *JITAddrConst = ConstantInt::get(Int64, JITAddr);
-        Value *ModuleAddrConst = ConstantInt::get(Int64, ModuleAddr);
-        Value *RecompileHotArgs[] = {JITAddrConst, ModuleAddrConst};
+        Value *FuncAddrConst = ConstantInt::get(Int64, FuncAddr);
+        Value *RecompileHotArgs[] = {JITAddrConst, FuncAddrConst};
         Value *HotFnAddr = B.CreateCall(RecompileHot, RecompileHotArgs);
 
         // The recompile function returns address of optimized version.

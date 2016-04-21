@@ -59,7 +59,8 @@ public:
                  std::move(IndirectStubsMgrBuilder), InlineStubs),
         CXXRuntimeOverrides(
             [this](const std::string &S) { return mangle(S); }),
-        RecompileName(mangle("$recompile_hot")) {}
+        RecompileName(mangle("$recompile_hot")),
+        next_function_id(0) {}
 
   ~OrcLazyJIT() {
     // Run any destructors registered with __cxa_atexit.
@@ -71,6 +72,8 @@ public:
 
   static std::unique_ptr<CompileCallbackMgr> createCompileCallbackMgr(Triple T);
   static IndirectStubsManagerBuilder createIndirectStubsMgrBuilder(Triple T);
+
+  uint64_t next_id() { return next_function_id++; }
 
   ModuleHandleT addModule(std::unique_ptr<Module> M) {
     // Attach a data-layout if one isn't already present.
@@ -160,7 +163,7 @@ private:
       );
   }
 
-  TargetAddress recompileHot(Module *M) {
+  TargetAddress recompileHot(Function *F) {
     //TODO:  Add an argument to this to pass a function identifier so that
     //       we can lookup the original function's IR (and the handle to the stub
     //       we generated so we have something to actually compile, and so we can
@@ -169,13 +172,12 @@ private:
       
     // Recompile the function with a different compile layer that has higher optimization set.
     std::vector<std::unique_ptr<Module>> S;
-    S.push_back(std::unique_ptr<Module>(M));
+    S.push_back(std::unique_ptr<Module>(F->getParent()));
     auto H = HotCompileLayer.addModuleSet(std::move(S),
             llvm::make_unique<SectionMemoryManager>(),
             createResolver());
 
-    // TODO:  Pass in the function name we're interested in!
-    std::string FuncName = "SOMEFUNC";
+    std::string FuncName = F->getName();
 
     // Look up the optimized function body.
     auto HotFnSym =
@@ -198,8 +200,8 @@ private:
   }
 
   // Static helper.
-  static TargetAddress recompileHotStatic(OrcLazyJIT *J, Module *M) {
-      return J->recompileHot(M);
+  static TargetAddress recompileHotStatic(OrcLazyJIT *J, Function *F) {
+      return J->recompileHot(F);
   }
 
   std::string mangle(const std::string &Name) {
@@ -238,6 +240,10 @@ private:
   orc::LocalCXXRuntimeOverrides CXXRuntimeOverrides;
   std::vector<orc::CtorDtorRunner<CODLayerT>> IRStaticDestructorRunners;
   std::string RecompileName;
+  std::map<uint64_t, std::pair<std::shared_ptr<Function>, ModuleHandleT>> ColdFunctionASTs;
+  uint64_t next_function_id;
+
+                                
 };
 
 int runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]);
