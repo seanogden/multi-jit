@@ -285,11 +285,11 @@ private:
                          JITSymbolBase::flagsFromGlobalValue(F));
 
         CCInfo.setCompileAction([this, &LD, LMH, &F]() {
-          std::cout << "COMPILING " << F.getName().str() << std::endl;
-          auto attr = F.getAttributes();
-          if(attr.hasAttribute(AttributeSet::FunctionIndex, "FPGA")){
-            std::cout << "FPGA!!!" << std::endl;
-          }
+          //std::cout << "COMPILING " << F.getName().str() << std::endl;
+          //auto attr = F.getAttributes();
+          //if(attr.hasAttribute(AttributeSet::FunctionIndex, "FPGA")){
+          //  std::cout << "FPGA!!!" << std::endl;
+          //}
           return this->extractAndCompile(LD, LMH, F);
         });
       }
@@ -438,6 +438,9 @@ private:
 
     // Create the module.
     std::string NewName = SrcM.getName();
+
+    // A Partition is just a single function because our partitioner just pulls out
+    // individual functions.  So this loop really only runs once.
     for (auto *F : Part) {
       NewName += ".";
       NewName += F->getName();
@@ -447,6 +450,10 @@ private:
     M->setDataLayout(SrcM.getDataLayout());
     ValueToValueMapTy VMap;
 
+    // The Materializer aids in moving the function.  When we move the function
+    // from it's original module to a new module, we need to go through all of
+    // its instructions and variables and remap everything so that we can still
+    // access it from the new module.
     auto Materializer = createLambdaMaterializer([this, &LMResources, &M,
                                                   &VMap](Value *V) -> Value * {
       if (auto *GV = dyn_cast<GlobalVariable>(V))
@@ -509,6 +516,9 @@ private:
           return RuntimeDyld::SymbolInfo(nullptr);
         });
 
+    // At this point we pass the module containing our function of interest
+    // down to the instrumentation layer, which instruments it and then 
+    // passes it down to the cold compiler
     return LD.getDylibResources().ModuleAdder(BaseLayer, std::move(M),
 					      std::move(Resolver));
   }
