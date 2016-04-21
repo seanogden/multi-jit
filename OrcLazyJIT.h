@@ -161,12 +161,15 @@ private:
   }
 
   TargetAddress recompileHot(Module *M) {
-          // Recompile the function with a different compile layer that has higher optimization set.
-          //auto H = HotIROptsLayer.addModuleSet(singletonSet(M),
-          //llvm::make_unique<SectionMemoryManager>(),
-          //createResolver());
+    //TODO:  Add an argument to this to pass a function identifier so that
+    //       we can lookup the original function's IR (and the handle to the stub
+    //       we generated so we have something to actually compile, and so we can
+    //       get the pointer to the body of the function and replace it with our
+    //       hot function body's pointer.
+      
+    // Recompile the function with a different compile layer that has higher optimization set.
     std::vector<std::unique_ptr<Module>> S;
-    S.push_back(M);
+    S.push_back(std::unique_ptr<Module>(M));
     auto H = HotCompileLayer.addModuleSet(std::move(S),
             llvm::make_unique<SectionMemoryManager>(),
             createResolver());
@@ -181,6 +184,8 @@ private:
 
     // Find the function body pointer and update it to point at the optimized
     // version.
+    // TODO:  'I->second.second' below should be a Module handle to the the
+    //        module containing the stub for our function.
     auto BodyPtrSym =
         findUnmangledSymbolIn(I->second.second, FuncName + "$address");
     auto BodyPtr = reinterpret_cast<void*>(

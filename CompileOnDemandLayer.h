@@ -419,6 +419,12 @@ private:
         return 0;
     }
 
+    //TODO: Store a mapping from function identifier to IR for the function and the handle to 
+    //      the stub module so that we can look it up later for recompilation.
+    //      The cold version of the function will then call recompileHot with the baked
+    //      in identifier so that we know *what* to recompile, and where the body pointer is
+    //      in the stub module so we can replace said pointer.
+
     return CalledAddr;
   }
 
