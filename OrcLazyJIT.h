@@ -15,13 +15,13 @@
 #ifndef LLVM_TOOLS_LLI_ORCLAZYJIT_H
 #define LLVM_TOOLS_LLI_ORCLAZYJIT_H
 
-#include "llvm/ADT/Triple.h"
 #include "CompileOnDemandLayer.h"
-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "IRCompileLayer.h"
 #include "IRTransformLayer.h"
 #include "ObjectLinkingLayer.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 
 using namespace llvm;
