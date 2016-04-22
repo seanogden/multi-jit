@@ -181,8 +181,9 @@ private:
 
     // Find the function body pointer and update it to point at the optimized
     // version.
-    // TODO:  'I->second.second' below should be a Module handle to the the
-    //        module containing the stub for our function.
+    // TODO:  Get access to CODLayer's StubsMgr and then updatePointer on the
+    //        stub for this function to the HotFnAddr.
+    
     auto BodyPtrSym =
         findUnmangledSymbolIn(I->second.second, FuncName + "$address");
     auto BodyPtr = reinterpret_cast<void*>(
