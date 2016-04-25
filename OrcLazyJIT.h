@@ -121,7 +121,7 @@ public:
 
 private:
 
-  std::unique_ptr<RuntimeDyld::SymbolResolver> createResolver() {
+  std::shared_ptr<RuntimeDyld::SymbolResolver> createResolver() {
       // We need a memory manager to allocate memory and resolve symbols for this
       // new module. Create one that resolves symbols by looking back into the
       // JIT.
@@ -183,12 +183,13 @@ private:
     // version.
     // TODO:  Get access to CODLayer's StubsMgr and then updatePointer on the
     //        stub for this function to the HotFnAddr.
-    
+   /* 
     auto BodyPtrSym =
         findUnmangledSymbolIn(I->second.second, FuncName + "$address");
     auto BodyPtr = reinterpret_cast<void*>(
             static_cast<uintptr_t>(BodyPtrSym.getAddress()));
     memcpy(BodyPtr, &HotFnAddr, sizeof(uintptr_t));
+    */
 
     // Return the address for the hot function body so that the cold function
     // (which called us) can finish by calling it.
