@@ -74,6 +74,13 @@ public:
   static IndirectStubsManagerBuilder createIndirectStubsMgrBuilder(Triple T);
 
   ModuleHandleT addModule(std::unique_ptr<Module> M) {
+    auto func_addrs = std::vector<Function*>();
+
+    for (auto &F : *M)
+    {
+        func_addrs.push_back(&F);
+    }
+
     // Attach a data-layout if one isn't already present.
     if (M->getDataLayout().isDefault())
       M->setDataLayout(DL);
@@ -99,6 +106,13 @@ public:
     CtorRunner.runViaLayer(CODLayer);
 
     IRStaticDestructorRunners.emplace_back(std::move(DtorNames), H);
+
+    
+    for (auto &F : func_addrs)
+    {
+       FunctionStubTable[F] = H;
+    }
+
 
     return H;
   }
@@ -166,6 +180,8 @@ private:
     //       hot function body's pointer.
       
     // Recompile the function with a different compile layer that has higher optimization set.
+    auto I = FunctionStubTable.find(F);
+    assert(I != FunctionStubTable.end() && "Function isn't cold!!");
     std::vector<std::unique_ptr<Module>> S;
     S.push_back(std::unique_ptr<Module>(F->getParent()));
     auto H = HotCompileLayer.addModuleSet(std::move(S),
@@ -183,13 +199,11 @@ private:
     // version.
     // TODO:  Get access to CODLayer's StubsMgr and then updatePointer on the
     //        stub for this function to the HotFnAddr.
-   /* 
     auto BodyPtrSym =
-        findUnmangledSymbolIn(I->second.second, FuncName + "$address");
+        findUnmangledSymbolIn(I->second, FuncName + "$address");
     auto BodyPtr = reinterpret_cast<void*>(
             static_cast<uintptr_t>(BodyPtrSym.getAddress()));
     memcpy(BodyPtr, &HotFnAddr, sizeof(uintptr_t));
-    */
 
     // Return the address for the hot function body so that the cold function
     // (which called us) can finish by calling it.
