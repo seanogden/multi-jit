@@ -20,9 +20,10 @@
 #include "IRTransformLayer.h"
 #include "ObjectLinkingLayer.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -48,8 +49,8 @@ public:
              IndirectStubsManagerBuilder IndirectStubsMgrBuilder,
              bool InlineStubs)
       : TM(std::move(TM)), DL(this->TM->createDataLayout()),
-	CCMgr(std::move(CCMgr)),
-	ObjectLayer(),
+	    CCMgr(std::move(CCMgr)),
+	    ObjectLayer(),
         CompileLayer(ObjectLayer, orc::SimpleCompiler(*this->TM)),
         HotCompileLayer(ObjectLayer, orc::SimpleCompiler(*this->TM)),
         IRDumpLayer(CompileLayer, createDebugDumper()),
@@ -60,7 +61,10 @@ public:
         CXXRuntimeOverrides(
             [this](const std::string &S) { return mangle(S); }),
         RecompileName(mangle("$recompile_hot")),
-        FunctionStubTable() {}
+        FunctionIDs(),
+        FunctionNames(),
+        FunctionModules(),
+        FunctionCounter(0) {}
 
   ~OrcLazyJIT() {
     // Run any destructors registered with __cxa_atexit.
@@ -74,11 +78,18 @@ public:
   static IndirectStubsManagerBuilder createIndirectStubsMgrBuilder(Triple T);
 
   ModuleHandleT addModule(std::unique_ptr<Module> M) {
-    auto func_addrs = std::vector<Function*>();
+    auto func_ids = std::vector<uint64_t>();
+
 
     for (auto &F : *M)
     {
-        func_addrs.push_back(&F);
+        std::cout << "HELLOOOO" << std::endl;
+        uint64_t id = FunctionCounter++;
+        func_ids.push_back(id);
+        FunctionIDs[mangle(F.getName())] = id;
+        FunctionNames[id] = F.getName();
+        FunctionModules[id] = std::shared_ptr<Module>(std::move(CloneModule(M.get()))); //this contains the original code fo the module.
+        //FunctionModules[id] = M.get(); //this contains the original code fo the module.
     }
 
     // Attach a data-layout if one isn't already present.
@@ -108,9 +119,11 @@ public:
     IRStaticDestructorRunners.emplace_back(std::move(DtorNames), H);
 
     
-    for (auto &F : func_addrs)
+    for (uint64_t id : func_ids)
     {
-       FunctionStubTable[F] = H;
+       JITSymbol BodyPtrSym = findUnmangledSymbolIn(H, FunctionNames[id] + "$stub_ptr");
+       void* BodyPtr = reinterpret_cast<void*>(static_cast<uintptr_t>(BodyPtrSym.getAddress()));
+       std::cout << "Body pointer for " << FunctionNames[id] << " = " << BodyPtr << std::endl;
     }
 
 
@@ -172,7 +185,7 @@ private:
       );
   }
 
-  TargetAddress recompileHot(Function *F) {
+  TargetAddress recompileHot(uint64_t F) {
     //TODO:  Add an argument to this to pass a function identifier so that
     //       we can lookup the original function's IR (and the handle to the stub
     //       we generated so we have something to actually compile, and so we can
@@ -180,38 +193,57 @@ private:
     //       hot function body's pointer.
       
     // Recompile the function with a different compile layer that has higher optimization set.
-    auto I = FunctionStubTable.find(F);
-    assert(I != FunctionStubTable.end() && "Function isn't cold!!");
-    std::vector<std::unique_ptr<Module>> S;
-    S.push_back(std::unique_ptr<Module>(F->getParent()));
-    auto H = HotCompileLayer.addModuleSet(std::move(S),
+    std::string FuncName = FunctionNames[F];
+    std::cout << "Function name: " << FuncName << "\tFunction ID: " << F << std::endl;
+    std::vector<std::shared_ptr<Module>> S;
+    S.push_back(FunctionModules[F]);
+
+    auto H = CompileLayer.addModuleSet(S,
             llvm::make_unique<SectionMemoryManager>(),
             createResolver());
 
-    std::string FuncName = F->getName();
+    std::cout << "Hot compiled!!" << std::endl;
 
     // Look up the optimized function body.
     auto HotFnSym =
-        HotCompileLayer.findSymbolIn(H, mangle(FuncName), true);
+        HotCompileLayer.findSymbolIn(H, FuncName, true);
     TargetAddress HotFnAddr = HotFnSym.getAddress();
+    std::cout << "HotFnAddr = " << reinterpret_cast<void*>(static_cast<uintptr_t>(HotFnAddr)) << std::endl;
+    std::cout << "Got a hot symbol!!!" << std::endl;
 
+    if (CODLayer.updatePointer(FuncName, HotFnAddr) != 0)
+        std::cout << "Updated pointer!!" << std::endl;
+    else
+        std::cout << "Problem updating pointer!!" << std::endl;
     // Find the function body pointer and update it to point at the optimized
     // version.
     // TODO:  Get access to CODLayer's StubsMgr and then updatePointer on the
     //        stub for this function to the HotFnAddr.
+    //std::cout << reinterpret_cast<void*>(static_cast<uintptr_t>(I)) << std::endl;
+    
+
+
+
+    /*
     auto BodyPtrSym =
-        findUnmangledSymbolIn(I->second, FuncName + "$address");
+        findUnmangledSymbolIn(I->second, FuncName + "$stub_ptr");
+    std::cout << "Found body symbol!!!" << std::endl;
+    //std::cout << reinterpret_cast<void*>(static_cast<uintptr_t>(BodyPtrSym))) << std::endl;
     auto BodyPtr = reinterpret_cast<void*>(
             static_cast<uintptr_t>(BodyPtrSym.getAddress()));
+    std::cout << "BodyPtr = " << BodyPtr << std::endl;
+
     memcpy(BodyPtr, &HotFnAddr, sizeof(uintptr_t));
 
+    std::cout << "dat memcpy tho..." << std::endl;
+    */
     // Return the address for the hot function body so that the cold function
     // (which called us) can finish by calling it.
     return HotFnAddr; 
   }
 
   // Static helper.
-  static TargetAddress recompileHotStatic(OrcLazyJIT *J, Function *F) {
+  static TargetAddress recompileHotStatic(OrcLazyJIT *J, uint64_t F) {
       return J->recompileHot(F);
   }
 
@@ -251,7 +283,10 @@ private:
   orc::LocalCXXRuntimeOverrides CXXRuntimeOverrides;
   std::vector<orc::CtorDtorRunner<CODLayerT>> IRStaticDestructorRunners;
   std::string RecompileName;
-  std::map<Function*, ModuleHandleT> FunctionStubTable;
+  std::map<std::string, uint64_t> FunctionIDs;
+  std::map<uint64_t, std::string> FunctionNames;
+  std::map<uint64_t, std::shared_ptr<Module>> FunctionModules;
+  uint64_t FunctionCounter;
 };
 
 int runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]);

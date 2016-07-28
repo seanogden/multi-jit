@@ -88,7 +88,7 @@ private:
     typedef ResourceOwnerImpl<ResourceT, ResourcePtrT> RO;
     return llvm::make_unique<RO>(std::move(ResourcePtr));
   }
-
+  
   struct LogicalModuleResources {
     std::unique_ptr<ResourceOwner<Module>> SourceModule;
     std::set<const Function*> StubsToClone;
@@ -429,6 +429,28 @@ private:
     return CalledAddr;
   }
 
+public:
+  TargetAddress updatePointer(std::string FuncName, TargetAddress FnBodyAddr) {
+    //Find out which logical dylib contains our symbol
+    auto LDI = LogicalDylibs.begin();
+    for (auto LDE = LogicalDylibs.end(); LDI != LDE; ++LDI) {
+        if (auto LMResources = LDI->getLogicalModuleResourcesForSymbol(FuncName, false)) {
+            Module &SrcM = LMResources->SourceModule->getResource();
+            std::string CalledFnName = mangle(FuncName, SrcM.getDataLayout());
+            if (auto EC = LMResources->StubsMgr->updatePointer(CalledFnName, FnBodyAddr)) {
+                assert(false && "Couldn't find the stub!");
+                return 0;
+            }
+            else
+                return FnBodyAddr;
+        }
+    }
+
+    assert(false && "Couldn't find the stub!");
+    return 0;
+  }
+
+private:
   template <typename PartitionT>
   BaseLayerModuleSetHandleT emitPartition(CODLogicalDylib &LD,
                                           LogicalModuleHandle LMH,

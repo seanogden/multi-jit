@@ -148,7 +148,7 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
         // counter for this func
         IRBuilder<> B(Entry);
         Value *CounterVal = B.CreateLoad(Counter, "counter");
-        Value *Condition = B.CreateICmpUGT(CounterVal, ConstantInt::get(Int32, 1000));
+        Value *Condition = B.CreateICmpUGT(CounterVal, ConstantInt::get(Int32, 9));
         Value *CounterInc = B.CreateAdd(CounterVal, ConstantInt::get(Int32, 1));
         B.CreateStore(CounterInc, Counter);
 
@@ -162,8 +162,11 @@ OrcLazyJIT::TransformFtor OrcLazyJIT::insertLocalProfilingCode() {
         // insert a compile to compile the hot version
         uint64_t JITAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
         uint64_t FuncAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&F));
+
+        std::cout << std::string(mangle(F.getName())) << std::endl;
+        std::cout << "Instrumenting function with " << FunctionIDs[mangle(F.getName())] << std::endl;
         Value *JITAddrConst = ConstantInt::get(Int64, JITAddr);
-        Value *FuncAddrConst = ConstantInt::get(Int64, FuncAddr);
+        Value *FuncAddrConst = ConstantInt::get(Int64, FunctionIDs[mangle(F.getName())]);
         Value *RecompileHotArgs[] = {JITAddrConst, FuncAddrConst};
         Value *HotFnAddr = B.CreateCall(RecompileHot, RecompileHotArgs);
 
@@ -420,6 +423,7 @@ int llvm::runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]) {
   Function *MainFunc = M->getFunction("main");
 
   // Add the module, look up main and run it.
+  std::cout << "Bout to add some modules!" << std::endl;
   auto MainHandle = J.addModule(std::move(M));
   auto MainSym = J.findSymbolIn(MainHandle, "main");
 

@@ -17,6 +17,8 @@
 #include "JITSymbol.h"
 #include <string>
 #include <vector>
+#include "llvm/IR/Mangler.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
 namespace orc {
@@ -76,6 +78,24 @@ public:
   LogicalModuleResources& getLogicalModuleResources(LogicalModuleHandle LMH) {
     return LMH->Resources;
   }
+
+  static std::string mangle(StringRef Name, const DataLayout &DL) {
+    std::string MangledName;
+    {
+      raw_string_ostream MangledNameStream(MangledName);
+      Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
+    }
+    return MangledName;
+  }
+
+  LogicalModuleResources* getLogicalModuleResourcesForSymbol(const std::string &Name, bool ExportedSymbolsOnly) {
+    for (auto LMI = LogicalModules.begin(), LME = LogicalModules.end();
+         LMI != LME; ++LMI)
+      if (auto Sym = findSymbolInLogicalModule(LMI, mangle(Name,LMI->Resources.SourceModule->getResource().getDataLayout()), ExportedSymbolsOnly))
+          return &LMI->Resources;
+    return nullptr;
+  }
+
 
   BaseLayerHandleIterator moduleHandlesBegin(LogicalModuleHandle LMH) {
     return LMH->BaseLayerHandles.begin();
